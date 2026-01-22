@@ -44,7 +44,7 @@ class NueveCuartos(entornos_o.Entorno):
         return accion in ("ir_Derecha", "ir_Izquierda", "subir", "bajar", "limpiar", "nada")
 
     def transicion(self, accion):
-        if not self.acción_legal(accion):
+        if not self.accion_legal(accion):
             raise ValueError("La acción no es legal para este estado")
         
         robot = self.x[0]
