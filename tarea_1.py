@@ -11,6 +11,7 @@ __author__ = 'dante_tostado'
 
 import entornos_f
 import entornos_o
+from random import choice
 
 class NueveCuartos(entornos_o.Entorno):
     """
@@ -91,6 +92,164 @@ class NueveCuartos(entornos_o.Entorno):
     def percepcion(self):
         return self.x[0], self.x[" ABCDEFGHI".find(self.x[0])]
 
+class AgenteAleatorio(entornos_o.Agente):
+    """
+    Un agente que solo regresa una accion al azar entre las acciones legales
+    """
+    def __init__(self, acciones):
+        self.acciones = acciones
+
+    def programa(self, _):
+        return choice(self.acciones)
+
+class AgenteReactivoNuevecuartos(entornos_o.Agente):
+    """
+    Un agente reactivo para el entorno de nueve cuartos
+
+    """
+    def __init__(self):
+        self.modelo = ['A'] + ['sucio'] * 9
+
+    def programa(self, percepcion):
+        robot_real, situacion_real = percepcion
+        
+    # Actualizar modelo interno
+        self.modelo[0] = robot_real
+        indice_robot = " ABCDEFGHI".find(robot_real)
+        self.modelo[indice_robot] = situacion_real    
+    
+    # Verifica el estado de limpieza de todos los cuartos
+        if all(estado == 'limpio' for estado in self.modelo[1:]):
+            return 'nada'
+    
+    # Si esta sucio, limpiar
+        if situacion_real == 'sucio':
+            return 'limpiar'
+    
+    # Si está limpio, moverse en forma de ciclo por los cuartos piso por piso siguiendo las escaleras permitidas.
+        if robot_real in ['A', 'B']:
+            return 'ir_Derecha'
+        
+        elif robot_real == 'C':
+            return 'subir'
+        
+        elif robot_real == 'F':
+            if self.modelo[4] == 'sucio' or self.modelo[5] == 'sucio': 
+                 return 'ir_Izquierda'
+            return 'subir'
+        
+        elif robot_real == 'D':
+            if self.modelo[5] == 'sucio': 
+                return 'ir_Derecha'
+            return 'bajar'
+        
+        elif robot_real == 'E':
+            if self.modelo[4] == 'sucio':
+                return 'ir_Izquierda'
+            return 'ir_Derecha'
+        
+        elif robot_real in ['I', 'H']:
+            return 'ir_Izquierda'
+        
+        elif robot_real == 'G':
+            return 'bajar'  
+        
+        return 'nada'  # Acción default si no se cumple ninguna condición
+    
+
+class AgenteReactivoSimpleNueveCuartos(entornos_o.Agente):
+    """
+    Agente reactivo simple (sin memoria).
+    Patrulla el entorno siguiendo una ruta fija.
+    Nunca se detiene porque no sabe si ya terminó.
+    """
+    def programa(self, percepcion):
+        robot, situacion = percepcion
+
+        # Si está sucio, limpiar
+        if situacion == 'sucio':
+            return 'limpiar'
+
+        # Reglas de movimiento 
+        # Piso 1: A -> B -> C
+        if robot == 'A': return 'ir_Derecha'
+        if robot == 'B': return 'ir_Derecha'
+        
+        # Subidas (Por la derecha)
+        if robot == 'C': return 'subir'   
+        if robot == 'F': return 'subir'   
+
+        # Piso 3: I -> H -> G
+        if robot == 'I': return 'ir_Izquierda'
+        if robot == 'H': return 'ir_Izquierda'
+        
+        # Bajada (Por la izquierda)
+        if robot == 'G': return 'bajar'   # De G baja a D
+
+        # Piso 2: D -> E -> F
+        if robot == 'D': return 'ir_Derecha'
+        if robot == 'E': return 'ir_Derecha' 
+        
+        # Si ninguna regla aplica, hacer nada
+        return 'nada'
+
+
+def test():
+    """
+    Prueba del entorno y los agentes
+    """
+    print("Prueba del entorno de nueve cuartos con Agente Aleatorio")
+    entornos_o.simulador(
+        NueveCuartos(),
+        AgenteAleatorio(['ir_Derecha', 'ir_Izquierda', 'subir', 'bajar', 'limpiar', 'nada']),
+        200
+    )
+
+    print("\nPrueba del entorno de nueve cuartos con Agente Reactivo")
+    entornos_o.simulador(
+        NueveCuartos(),
+        AgenteReactivoNuevecuartos(),
+        200
+    )
+
+    print("\nPrueba con Agente Reactivo Simple de nueve cuartos")
+    entornos_o.simulador(
+        NueveCuartos(),
+        AgenteReactivoSimpleNueveCuartos(),
+        200 
+    )
+    
+ 
+ # Conclusiones del test:   
+    # El agente aleatorio tiene un costo muy alto pq no sigue una estrategia y tarda mucho tiempo en limpiar todos los cuartos.
+    # Costo final del aleatorio tras 200 iteraciones: 368  (adjunto output):
+    # 199    ['I', 'limpio', 'limpio', 'limpio', 'sucio', 'limpio', 'sucio', 'limpio', 'limpio', 'limpio']       ir_Izquierda               368
+    
+    # Por otro lado el agente basado en modelo si tiene una estrategia de barrido circular que logra limpiar todos los cuartos con un costo total mas bajo.
+    # El basado en modelo no necesito llegar al limite de 200 iteraciones para limpiar todos los cuartos si no que ocupo solo 20 - 21 si contamos la primera que no hizo nada.
+    # El costo final del basado en modelo tras 200 iteraciones: 37 (adjunto output):
+    # 19    ['H', 'limpio', 'limpio', 'limpio', 'limpio', 'limpio', 'limpio', 'sucio', 'limpio', 'limpio']       ir_Izquierda                34
+    # 20    ['G', 'limpio', 'limpio', 'limpio', 'limpio', 'limpio', 'limpio', 'sucio', 'limpio', 'limpio']         limpiar                   36
+    # 21    ['G', 'limpio', 'limpio', 'limpio', 'limpio', 'limpio', 'limpio', 'limpio', 'limpio', 'limpio']           nada                    37
+    #  22    ['G', 'limpio', 'limpio', 'limpio', 'limpio', 'limpio', 'limpio', 'limpio', 'limpio', 'limpio']           nada                    37
+    
+    # El agente reactivo simple tiene termino de limpiar en la iteracion 17 (adjunto output):
+    # 16    ['E', 'limpio', 'limpio', 'limpio', 'limpio', 'sucio', 'limpio', 'limpio', 'limpio', 'limpio']         limpiar                   27
+    # 17    ['E', 'limpio', 'limpio', 'limpio', 'limpio', 'limpio', 'limpio', 'limpio', 'limpio', 'limpio']        ir_Derecha                 28
+    # 18    ['F', 'limpio', 'limpio', 'limpio', 'limpio', 'limpio', 'limpio', 'limpio', 'limpio', 'limpio']          subir                    30
+    # Pero al no tener memoria sigue patrullando y limpiando innecesariamente, aumentando su costo total.
+    # El costo final del basado en modelo tras 200 iteraciones: 453, es decir el mas alto de los 3:
+
+    # Por lo tanto podemos concluir que el agente basado en modelo es mucho mas eficiente que el aleatorio y el reactivo simple en este entorno de nueve cuartos.
+    # Esto se debe a que el agente basado en modelo si tiene una estrategia de limpieza y no depende meramente del azar, por lo cual yo lo considero mejor que el aleatorio.
+    # Y ademas al tener memoria del estado de los cuartos puede decidir cuando detenerse, a diferencia del reactivo simple que sigue patrullando sin necesidad y se queda indefinidamente.
+    
+    
+    
+
+if __name__ == "__main__":
+    test()
+    
 # Requiere el modulo entornos_f.py o entornos_o.py
 # Usa el modulo doscuartos_f.py para reutilizar código
 # Agrega los modulos que requieras de python
