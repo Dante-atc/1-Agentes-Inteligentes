@@ -11,6 +11,7 @@ __author__ = 'dante_tostado'
 
 import entornos_f
 import entornos_o
+import random
 from random import choice
 
 class NueveCuartos(entornos_o.Entorno):
@@ -193,6 +194,182 @@ class AgenteReactivoSimpleNueveCuartos(entornos_o.Agente):
         # Si ninguna regla aplica, hacer nada
         return 'nada'
 
+class NueveCuartosCiego(NueveCuartos):
+    """
+    Entorno ciego: El robot no sabe si el cuarto está sucio o limpio.
+    Solo sabe en qué cuarto se encuentra.
+    """
+    def percepcion(self):
+        # Solo regresa la ubicación del robot 
+        return self.x[0]
+    
+class AgenteReactivoModeloNueveCuartosCiego(AgenteReactivoNuevecuartos):
+    """
+    Agente para entorno ciego. 
+    Como no ve la suciedad, asume que todo está sucio al inicio.
+    Cuando limpia, actualiza su modelo interno asumiendo que funcionó.
+    """
+    def __init__(self):
+        # Inicializa con todo sucio
+        self.modelo = ['A'] + ['sucio'] * 9
+
+    def programa(self, percepcion):
+        robot_real = percepcion 
+        
+        # Actualizar posición en el modelo 
+        self.modelo[0] = robot_real
+        indice_robot = " ABCDEFGHI".find(robot_real)
+        
+        # Revisar modelo para ver si cree que está sucio
+        situacion_creida = self.modelo[indice_robot]
+
+        # Lógica de decisión
+        accion = 'nada'
+        
+        # Si ya cree que todo está limpio, parar
+        if all(estado == 'limpio' for estado in self.modelo[1:]):
+            accion = 'nada'
+            
+        # Si cree que está sucio, limpiar
+        elif situacion_creida == 'sucio':
+            accion = 'limpiar'
+        
+        # Si cree que está limpio, moverse
+        else:
+            if robot_real in ['A', 'B']: accion = 'ir_Derecha'
+            elif robot_real == 'C': accion = 'subir'
+            elif robot_real == 'F':
+                if self.modelo[4] == 'sucio' or self.modelo[5] == 'sucio': accion = 'ir_Izquierda'
+                else: accion = 'subir'
+            elif robot_real == 'D':
+                if self.modelo[5] == 'sucio': accion = 'ir_Derecha'
+                else: accion = 'bajar'
+            elif robot_real == 'E':
+                if self.modelo[4] == 'sucio': accion = 'ir_Izquierda'
+                else: accion = 'ir_Derecha'
+            elif robot_real in ['I', 'H']: accion = 'ir_Izquierda'
+            elif robot_real == 'G': accion = 'bajar'
+
+        # Asume que queda limpio si decidió limpiar
+        if accion == 'limpiar':
+            self.modelo[indice_robot] = 'limpio'
+            
+        return accion
+
+class NueveCuartosEstocastico(entornos_o.Entorno):
+    """
+    Clase para un entorno de nueve cuartos estocástico.
+
+    El estado se define como (robot, A, B, C, D, E, F, G, H, I)
+    los cuartos del primer nivel son A, B, C
+    los cuartos del segundo nivel son D, E, F
+    los cuartos del tercer nivel son G, H, I
+    donde robot puede tener los valores "A", "B", "C", "D", "E", "F", "G", "H", "I"
+    A, B, C, D, E, F, G, H, I pueden tener los valores "limpio", "sucio"
+
+    Las acciones válidas en el entorno son ("ir_Derecha", "ir_Izquierda", "subir", "bajar", "limpiar", "nada").
+    La acción de "subir" solo es legal en los primeros dos pisos, en los cuartos de la derecha, 
+    mientras que la acción de "bajar" solo es legal en los dos pisos de arriba de arriba y en el cuarto de la izquierda.
+    Todas las demás acciones son válidas en todos los estados.
+
+    Cuando el agente decide aspirar, el 80% de las veces limpiara pero el 20% (aleatorio) dejara sucio el cuarto. 
+    Igualmente, cuando el agente decide cambiar de cuarto, se cambia correctamente de cuarto el 80% de la veces, el 10% de la veces 
+    se queda en su lugar y el 10% de las veces realiza una acción legal aleatoria.
+
+    """
+    def __init__(self, x0=["A", "sucio", "sucio", "sucio", "sucio", "sucio", "sucio", "sucio", "sucio", "sucio"]):
+        """
+        Por default inicialmente el robot está en A y los nueve cuartos están sucios
+        
+        """
+        self.x = x0[:]
+        self.costo = 0
+
+    def accion_legal(self, accion):
+        return accion in ("ir_Derecha", "ir_Izquierda", "subir", "bajar", "limpiar", "nada")
+
+    def _acciones_legales_desde(self, robot):
+        "Acciones permitidas desde la posición actual del robot"
+        acciones = ["limpiar", "nada"]
+        indice = " ABCDEFGHI".find(robot)
+
+        # Movimiento horizontal
+        if indice % 3 != 0:
+            acciones.append("ir_Derecha")
+        if (indice - 1) % 3 != 0:
+            acciones.append("ir_Izquierda")
+
+        # Movimiento vertical
+        if indice in (3, 6):
+            acciones.append("subir")
+        if indice in (4, 7):
+            acciones.append("bajar")
+
+        return acciones
+
+    def _costo_accion(self, accion):
+        if accion == "limpiar":
+            return 1
+        if accion in ("ir_Derecha", "ir_Izquierda"):
+            return 2
+        if accion in ("subir", "bajar"):
+            return 3
+        return 0  # nada
+
+    def _mover_deterministico(self, accion, indice):
+        "Aplica movimiento sin estocasticidad usando el índice actual."
+        if accion == "ir_Derecha" and indice % 3 != 0:
+            self.x[0] = " ABCDEFGHI"[indice + 1]
+        elif accion == "ir_Izquierda" and (indice - 1) % 3 != 0:
+            self.x[0] = " ABCDEFGHI"[indice - 1]
+        elif accion == "subir" and indice in (3, 6):
+            self.x[0] = " ABCDEFGHI"[indice + 3]
+        elif accion == "bajar" and indice in (4, 7):
+            self.x[0] = " ABCDEFGHI"[indice - 3]
+
+    def transicion(self, accion):
+        if not self.accion_legal(accion):
+            raise ValueError("La acción no es legal para este estado")
+
+        robot = self.x[0]
+        indice = " ABCDEFGHI".find(robot)
+
+        accion_efectiva = accion
+
+        # Limpieza y movimiento estocástico
+        if accion == "limpiar":
+            # 80% limpia, 20% falla
+            if random.random() < 0.8:
+                self.x[indice] = "limpio"
+            # El costo se agrega después
+
+        elif accion in ("ir_Derecha", "ir_Izquierda", "subir", "bajar"):
+            tiro = random.random()
+            if tiro < 0.8:
+                accion_efectiva = accion
+            elif tiro < 0.9:
+                accion_efectiva = "nada"  # Se queda en el lugar
+            else:
+                accion_efectiva = choice(self._acciones_legales_desde(robot))
+
+            # Ejecutar la acción 
+            if accion_efectiva in ("ir_Derecha", "ir_Izquierda", "subir", "bajar"):
+                self._mover_deterministico(accion_efectiva, indice)
+            elif accion_efectiva == "limpiar":
+                if random.random() < 0.8:
+                    self.x[indice] = "limpio"
+
+        elif accion == "nada":
+            accion_efectiva = "nada"
+
+        # Costo basado en la acción realizada
+        self.costo += self._costo_accion(accion_efectiva)
+
+    def percepcion(self):
+        return self.x[0], self.x[" ABCDEFGHI".find(self.x[0])]
+
+class AgenteReactivoModeloEstocastico(AgenteReactivoNuevecuartos):
+    pass
 
 def test():
     """
@@ -219,6 +396,19 @@ def test():
         200 
     )
     
+    print("Prueba con Agente Ciego basado en Modelo de nueve cuartos")
+    entornos_o.simulador(
+        NueveCuartosCiego(), 
+        AgenteReactivoModeloNueveCuartosCiego(), 
+        200
+    )
+    
+    print("Prueba del entorno de nueve cuartos estocástico con Agente basado en Modelo" )
+    entornos_o.simulador(
+        NueveCuartosEstocastico(),
+        AgenteReactivoModeloEstocastico(),
+        200
+    )
  
  # Conclusiones del test:   
     # El agente aleatorio tiene un costo muy alto pq no sigue una estrategia y tarda mucho tiempo en limpiar todos los cuartos.
@@ -253,4 +443,3 @@ if __name__ == "__main__":
 # Requiere el modulo entornos_f.py o entornos_o.py
 # Usa el modulo doscuartos_f.py para reutilizar código
 # Agrega los modulos que requieras de python
-
